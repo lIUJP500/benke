@@ -48,7 +48,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.bitcat.accountbook.ai.AiParserRepository
-import com.bitcat.accountbook.ai.OcrHelper
+import com.bitcat.accountbook.ai.GlmOcrRepository
 import com.bitcat.accountbook.data.database.DatabaseProvider
 import com.bitcat.accountbook.data.entity.RawInputEntity
 import com.bitcat.accountbook.data.entity.RecordEntity
@@ -256,7 +256,7 @@ fun AddRecordScreen(
             "photo", "camera" -> {
                 val u = rawUri?.let { Uri.parse(it) } ?: return ""
                 // ✅ OCR 把图片变成文本
-                OcrHelper.recognizeText(context, u)
+                GlmOcrRepository.recognizeText(context, u)
             }
             else -> rawText
         }.trim()

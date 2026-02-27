@@ -8,10 +8,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.IOException
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object AiParserRepository {
@@ -35,34 +31,43 @@ object AiParserRepository {
      * 统一入口：传入文本（文本/语音转写/OCR文本），返回结构化结果
      * 失败时会 fallback 本地规则，保证功能可用。
      */
-    suspend fun parseExpense(text: String): AiExpenseResult {
+    suspend fun parseExpense(
+        text: String,
+        inputType: String = "text",
+        rawUri: String? = null
+    ): AiExpenseResult {
         val cleaned = text.trim()
         if (cleaned.isBlank()) return AiExpenseResult(evidence = "")
 
         val key = BuildConfig.ZHIPU_API_KEY.trim()
         if (key.isBlank()) {
             // 没配 key 就直接走本地兜底
-            return parseWithLocalFallback(cleaned)
+            return parseWithLocalFallback(cleaned, inputType = inputType, rawUri = rawUri)
         }
 
         // 先远程 LLM
         val remote = try {
-            parseWithGlm5(cleaned, key)
+            parseWithGlm5(cleaned, key, inputType = inputType, rawUri = rawUri)
         } catch (_: Exception) {
             null
         }
 
         // 远程失败/输出不合法 => 本地兜底
-        return remote ?: parseWithLocalFallback(cleaned)
+        return remote ?: parseWithLocalFallback(cleaned, inputType = inputType, rawUri = rawUri)
     }
 
     /**
      * GLM-5：通用端点 chat/completions
      * 要求模型只输出 JSON（AiExpenseResult 格式）
      */
-    private fun parseWithGlm5(text: String, apiKey: String): AiExpenseResult? {
+    private fun parseWithGlm5(
+        text: String,
+        apiKey: String,
+        inputType: String,
+        rawUri: String?
+    ): AiExpenseResult? {
         val sys = buildSystemPrompt()
-        val user = buildUserPrompt(text)
+        val user = buildUserPrompt(text = text, inputType = inputType, rawUri = rawUri)
 
         val bodyObj = GlmChatRequest(
             model = MODEL,
@@ -123,9 +128,14 @@ object AiParserRepository {
 从用户输入中抽取并输出以下字段（字段必须存在，值可以为 null 或空数组）：
 {
   "occurredAt": "yyyy-MM-dd HH:mm" 或 null,
+  "occurredAtMillis": number(epochMillis) 或 null,
   "title": string 或 null,
   "amount": number 或 null,
+  "currency": "CNY" 或 null,
   "tags": string[]（可以空数组）,
+  "inputType": "text"/"voice"/"photo"/"camera" 或 null,
+  "rawText": string 或 null,
+  "rawUri": string 或 null,
   "confidence": number(0~1) 或 null,
   "evidence": string 或 null
 }
@@ -136,17 +146,23 @@ object AiParserRepository {
 4) tags：若用户文本里出现明显类别词（餐饮/交通/购物/娱乐/学习/医疗/住房/通讯/旅行等）可给 1~3 个标签；否则空数组。
 5) evidence：截取原文中最关键的一小段（<=120字）。
 6) confidence：你对抽取结果的把握（0~1）。
+7) 需要尽量生成可直接入库信息：currency 默认 CNY；inputType 优先使用用户提供来源；rawText 尽量保留用户原文。
+8) occurredAt 与 occurredAtMillis 可二选一提供，若都无法确定则都为 null。
         """.trim()
     }
 
-    private fun buildUserPrompt(text: String): String {
-        return "用户输入：$text"
+    private fun buildUserPrompt(text: String, inputType: String, rawUri: String?): String {
+        return buildString {
+            appendLine("输入来源: $inputType")
+            if (!rawUri.isNullOrBlank()) appendLine("图片URI: $rawUri")
+            append("用户输入：$text")
+        }
     }
 
     /**
      * 本地兜底解析：简单可用，保证系统不因网络/模型问题不可用
      */
-    private fun parseWithLocalFallback(text: String): AiExpenseResult {
+    private fun parseWithLocalFallback(text: String, inputType: String, rawUri: String?): AiExpenseResult {
         val amount = Regex("""(\d+(\.\d+)?)""").find(text)?.value?.toDoubleOrNull()
 
         val title = text
@@ -160,9 +176,14 @@ object AiParserRepository {
 
         return AiExpenseResult(
             occurredAt = null,
+            occurredAtMillis = null,
             title = title,
             amount = amount,
+            currency = "CNY",
             tags = emptyList(),
+            inputType = inputType,
+            rawText = text,
+            rawUri = rawUri,
             confidence = 0.35,
             evidence = text.take(120)
         )

@@ -85,6 +85,13 @@ private data class ParsedRecordUi(
     val rawPreview: String
 )
 
+private data class ParsedAiMeta(
+    val occurredAtMillis: Long? = null,
+    val inputType: String? = null,
+    val rawText: String? = null,
+    val rawUri: String? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddRecordScreen(
@@ -151,6 +158,7 @@ fun AddRecordScreen(
     var editTitle by remember { mutableStateOf("") }
     var editAmount by remember { mutableStateOf("") }
     var editTags by remember { mutableStateOf(listOf<String>()) }
+    var parsedAiMeta by remember { mutableStateOf(ParsedAiMeta()) }
 
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -331,7 +339,11 @@ fun AddRecordScreen(
                             }
 
                             // 3) 调大模型（当前仓库里是可运行 stub，后面替换为真实 API）
-                            val ai = AiParserRepository.parseExpense(parseText)
+                            val ai = AiParserRepository.parseExpense(
+                                text = parseText,
+                                inputType = rawType,
+                                rawUri = rawUri
+                            )
 
                             // 4) fallback：模型缺字段，用本地规则补
                             val now = LocalDateTime.now()
@@ -351,6 +363,12 @@ fun AddRecordScreen(
                             )
 
                             parseState = ParseState.Parsed(parsed)
+                            parsedAiMeta = ParsedAiMeta(
+                                occurredAtMillis = ai.occurredAtMillis,
+                                inputType = ai.inputType,
+                                rawText = ai.rawText,
+                                rawUri = ai.rawUri
+                            )
                             editDate = parsed.dateText
                             editTitle = parsed.title
                             editAmount = parsed.amountText
@@ -468,8 +486,9 @@ fun AddRecordScreen(
                                 return@ExtractedResultCard
                             }
 
-                            val occurredAtMillis =
-                                parseDateTimeToMillis(editDate) ?: System.currentTimeMillis()
+                            val occurredAtMillis = parsedAiMeta.occurredAtMillis
+                                ?: parseDateTimeToMillis(editDate)
+                                ?: System.currentTimeMillis()
 
                             scope.launch(Dispatchers.IO) {
                                 try {
@@ -489,9 +508,11 @@ fun AddRecordScreen(
                                     db.rawInputDao().insert(
                                         RawInputEntity(
                                             recordId = id,
-                                            inputType = rawType,
-                                            rawText = rawTextToSave ?: rawText.takeIf { it.isNotBlank() },
-                                            rawUri = rawUri,
+                                            inputType = parsedAiMeta.inputType ?: rawType,
+                                            rawText = parsedAiMeta.rawText
+                                                ?: rawTextToSave
+                                                ?: rawText.takeIf { it.isNotBlank() },
+                                            rawUri = parsedAiMeta.rawUri ?: rawUri,
                                             createdAt = nowMillis
                                         )
                                     )
@@ -509,6 +530,7 @@ fun AddRecordScreen(
                             rawTextToSave = null
                             rawPreview = ""
                             rawText = ""
+                            parsedAiMeta = ParsedAiMeta()
                             parseState = ParseState.Idle
                             selectedTagIds = emptySet()
                         }

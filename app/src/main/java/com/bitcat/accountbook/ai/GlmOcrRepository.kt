@@ -43,7 +43,8 @@ object GlmOcrRepository {
 
         require(bytes.size <= MAX_IMAGE_BYTES) { "图片超过 8MB 限制" }
 
-        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val resolvedType = context.contentResolver.getType(uri).orEmpty().lowercase()
+        val mimeType = if (resolvedType.startsWith("image/")) resolvedType else "image/jpeg"
         val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val dataUrl = "data:$mimeType;base64,$base64"
 
@@ -58,7 +59,8 @@ object GlmOcrRepository {
         http.newCall(req).execute().use { resp ->
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                error("GLM-OCR 请求失败(${resp.code})")
+                val detail = raw.take(240).ifBlank { "无响应体" }
+                error("GLM-OCR 请求失败(${resp.code})：$detail")
             }
             if (raw.isBlank()) return@use ""
 
@@ -92,9 +94,7 @@ object GlmOcrRepository {
                         })
                         add(buildJsonObject {
                             put("type", JsonPrimitive("image_url"))
-                            put("image_url", buildJsonObject {
-                                put("url", JsonPrimitive(dataUrl))
-                            })
+                            put("image_url", JsonPrimitive(dataUrl))
                         })
                     })
                 }

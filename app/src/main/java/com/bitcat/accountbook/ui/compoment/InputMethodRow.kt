@@ -26,7 +26,7 @@ fun InputMethodRow(
             label = { Text("语音") }
         )
         FilterChip(
-            selected = selected == InputMethod.PHOTO,
+            selected = selected == InputMethod.CAMERA,
             onClick = { onSelect(InputMethod.CAMERA) },
             label = { Text("拍照") }
         )

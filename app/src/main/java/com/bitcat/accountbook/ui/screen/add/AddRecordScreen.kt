@@ -178,7 +178,12 @@ fun AddRecordScreen(
 
         // 统一“解析入口”：让解析都从 rawText 开始（语音直接塞 text；图像走 OCR 后也会塞）
         rawText = text ?: ""
-        selectedMethod = InputMethod.TEXT
+        selectedMethod = when (type) {
+            "voice" -> InputMethod.VOICE
+            "photo" -> InputMethod.PHOTO
+            "camera" -> InputMethod.CAMERA
+            else -> InputMethod.TEXT
+        }
     }
 
     /* ---------------- 相机：FileProvider uri + 权限 ---------------- */
@@ -398,7 +403,8 @@ fun AddRecordScreen(
                 onTakePhotoClick = {
                     if (hasCameraPermission()) launchCamera()
                     else requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                }
+                },
+                photoPreviewUri = rawUri
             )
 
             when (val s = parseState) {

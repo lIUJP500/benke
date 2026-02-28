@@ -1,10 +1,13 @@
 package com.bitcat.accountbook.ui.component
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import coil.compose.rememberAsyncImagePainter
 
 // 原始输入+智能解析
 @Composable
@@ -16,6 +19,7 @@ fun RawInputCard(
     onVoiceClick: () -> Unit,
     onPickPhotoClick: () -> Unit,
     onTakePhotoClick: () -> Unit,
+    photoPreviewUri: String? = null,
 ) {
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -44,12 +48,38 @@ fun RawInputCard(
                     Button(onClick = onTakePhotoClick, modifier = Modifier.fillMaxWidth()) {
                         Text("打开相机拍照")
                     }
+                    if (!photoPreviewUri.isNullOrBlank()) {
+                        Text("图片预览", style = MaterialTheme.typography.labelLarge)
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Image(
+                                painter = rememberAsyncImagePainter(photoPreviewUri),
+                                contentDescription = "拍照预览",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
                 }
 
                 InputMethod.PHOTO -> {
                     Text("上传图片")
                     Button(onClick = onPickPhotoClick, modifier = Modifier.fillMaxWidth()) {
                         Text("从相册选择图片")
+                    }
+                    if (!photoPreviewUri.isNullOrBlank()) {
+                        Text("图片预览", style = MaterialTheme.typography.labelLarge)
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Image(
+                                painter = rememberAsyncImagePainter(photoPreviewUri),
+                                contentDescription = "上传图片预览",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
                 }
             }
@@ -60,4 +90,3 @@ fun RawInputCard(
         }
     }
 }
-

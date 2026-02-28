@@ -94,7 +94,9 @@ object GlmOcrRepository {
                         })
                         add(buildJsonObject {
                             put("type", JsonPrimitive("image_url"))
-                            put("image_url", JsonPrimitive(dataUrl))
+                            put("image_url", buildJsonObject {
+                                put("url", JsonPrimitive(dataUrl))
+                            })
                         })
                     })
                 }

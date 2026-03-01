@@ -501,7 +501,14 @@ fun AddRecordScreen(
                             scope.launch(Dispatchers.IO) {
                                 try {
                                     val nowMillis = System.currentTimeMillis()
+                                    val parsedTagIds = editTags
+                                        .map { it.trim() }
+                                        .filter { it.isNotBlank() }
+                                        .map { tagName ->
+                                            tagDao.upsertByName(tagName).id
+                                        }
 
+                                    val finalTagIds = (selectedTagIds + parsedTagIds).toList()
                                     val id = recordDao.insertRecordWithTags(
                                         record = RecordEntity(
                                             occurredAt = occurredAtMillis,
@@ -510,7 +517,7 @@ fun AddRecordScreen(
                                             createdAt = nowMillis,
                                             updatedAt = nowMillis
                                         ),
-                                        tagIds = selectedTagIds.toList()
+                                        tagIds = finalTagIds
                                     )
 
                                     db.rawInputDao().insert(

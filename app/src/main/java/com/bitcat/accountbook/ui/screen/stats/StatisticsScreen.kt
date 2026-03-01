@@ -25,7 +25,7 @@ import com.bitcat.accountbook.data.model.WeekTotal
 import kotlin.math.*
 
 private enum class StatMode(val label: String) { WEEK("周"), MONTH("月"), TAG("标签") }
-
+private val DEFAULT_TAG_NAMES = listOf("餐饮", "交通", "购物", "学习", "娱乐", "房租", "医疗")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen() {
@@ -39,52 +39,56 @@ fun StatisticsScreen() {
 
     // 真实标签（用于 TAG 模式选择）
     val allTagEntities by tagDao.observeAllTags().collectAsStateWithLifecycle(initialValue = emptyList())
-    val allTags = allTagEntities.map { it.name }
+    val allTags = remember(allTagEntities) {
+        (DEFAULT_TAG_NAMES + allTagEntities.map { it.name }).distinct()
+    }
     var selectedTagId by rememberSaveable { mutableStateOf<Long?>(null) }
     var selectedTagName by rememberSaveable { mutableStateOf("") }
 
-    LaunchedEffect(allTagEntities) {
-        if (selectedTagId == null && allTagEntities.isNotEmpty()) {
-            selectedTagId = allTagEntities.first().id
-            selectedTagName = allTagEntities.first().name
+    LaunchedEffect(allTagEntities, allTags) {
+        if (selectedTagName.isBlank() && allTags.isNotEmpty()) {
+            selectedTagName = allTags.first()
+        }
+        if (selectedTagId == null && selectedTagName.isNotBlank()) {
+            selectedTagId = allTagEntities.firstOrNull { it.name == selectedTagName }?.id
         }
     }
+    val (weekStartMillis, weekEndMillis) = remember { currentWeekRangeMillis() }
+    val (monthStartMillis, monthEndMillis) = remember { currentMonthRangeMillis() }
+    val (tagStartMillis, tagEndMillis) = remember { last12WeeksRangeMillis() }
 
     // 根据模式决定统计时间范围
-    val (startMillis, endMillis) = remember(mode) {
-        when (mode) {
-            StatMode.WEEK -> currentWeekRangeMillis()
-            StatMode.MONTH -> currentMonthRangeMillis()
-            StatMode.TAG -> last12WeeksRangeMillis()
-        }
+    val (startMillis, endMillis) = when (mode) {
+        StatMode.WEEK -> weekStartMillis to weekEndMillis
+        StatMode.MONTH -> monthStartMillis to monthEndMillis
+        StatMode.TAG -> tagStartMillis to tagEndMillis
+
     }
 
     // ====== 1) 折线数据（真数据） ======
-    val weekDaily by recordDao.observeDailyTotals(startMillis, endMillis)
+    val weekDaily by recordDao.observeDailyTotals(weekStartMillis, weekEndMillis)
         .collectAsStateWithLifecycle(initialValue = emptyList())
 
-    val monthDaily by recordDao.observeDailyTotals(startMillis, endMillis)
+    val monthDaily by recordDao.observeDailyTotals(monthStartMillis, monthEndMillis)
         .collectAsStateWithLifecycle(initialValue = emptyList())
 
     val tagWeekly by if (selectedTagId != null) {
-        recordDao.observeWeeklyTotalsByTag(startMillis, endMillis, selectedTagId!!)
+        recordDao.observeWeeklyTotalsByTag(tagStartMillis, tagEndMillis, selectedTagId!!)
             .collectAsStateWithLifecycle(initialValue = emptyList())
     } else {
         remember { mutableStateOf(emptyList()) }
     }
 
-    val currentTrend: List<Double> = remember(mode, weekDaily, monthDaily, tagWeekly, startMillis, endMillis) {
+    val currentTrend: List<Double> = remember(mode, weekDaily, monthDaily, tagWeekly, weekStartMillis, monthStartMillis, monthEndMillis, tagStartMillis) {
         when (mode) {
-            StatMode.WEEK -> fillDailySeries7Days(weekDaily, startMillis)
-            StatMode.MONTH -> fillDailySeriesMonth(monthDaily, startMillis, endMillis)
-            StatMode.TAG -> fillWeeklySeries12Weeks(tagWeekly, startMillis)
+            StatMode.WEEK -> fillDailySeries7Days(weekDaily, weekStartMillis)
+            StatMode.MONTH -> fillDailySeriesMonth(monthDaily, monthStartMillis, monthEndMillis)
+            StatMode.TAG -> fillWeeklySeries12Weeks(tagWeekly, tagStartMillis)
         }
     }
 
     // ====== 2) 饼图数据（真数据） ======
-    val (monthStartForPie, monthEndForPie) = remember { currentMonthRangeMillis() }
-
-    val tagTotals by recordDao.observeTagTotalsInRange(monthStartForPie, monthEndForPie)
+    val tagTotals by recordDao.observeTagTotalsInRange(startMillis, endMillis)
         .collectAsStateWithLifecycle(initialValue = emptyList())
 
     // KPI
@@ -109,12 +113,11 @@ fun StatisticsScreen() {
             // 2) 标签模式：选择标签（用你数据库 tags）
             if (mode == StatMode.TAG) {
                 TagPickerRow(
-                    tags = allTagEntities.map { it.name },
+                    tags = allTags,
                     selected = selectedTagName,
                     onSelect = { name ->
-                        val t = allTagEntities.firstOrNull { it.name == name } ?: return@TagPickerRow
-                        selectedTagId = t.id
-                        selectedTagName = t.name
+                        selectedTagName = name
+                        selectedTagId = allTagEntities.firstOrNull { it.name == name }?.id
                     }
                 )
             }

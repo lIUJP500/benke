@@ -67,7 +67,6 @@ object GlmOcrRepository {
             if (raw.isBlank()) return@use ""
 
             val root = json.parseToJsonElement(raw).jsonObject
-            val content = root["choices"]
             val contentNode = root["choices"]
                 ?.jsonArray
                 ?.firstOrNull()

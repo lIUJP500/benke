@@ -31,8 +31,7 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class RangeMode(val label: String) { WEEK("本周"), MONTH("本月"), CUSTOM("自定义") }
-
+private enum class RangeMode(val label: String) { ALL("全部"), WEEK("本周"), MONTH("本月"), CUSTOM("自定义") }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordListScreen(
@@ -51,7 +50,7 @@ fun RecordListScreen(
     var selectedTagId by rememberSaveable { mutableStateOf<Long?>(null) } // null=全部
 
     // ====== 筛选条件 ======
-    var rangeMode by rememberSaveable { mutableStateOf(RangeMode.MONTH) }
+    var rangeMode by rememberSaveable { mutableStateOf(RangeMode.ALL) }
     var customStartMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var customEndMillis by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -62,6 +61,7 @@ fun RecordListScreen(
 
     val (startMillis, endMillis) = remember(rangeMode, customStartMillis, customEndMillis) {
         when (rangeMode) {
+            RangeMode.ALL -> allRangeMillis()
             RangeMode.WEEK -> currentWeekRangeMillis()
             RangeMode.MONTH -> currentMonthRangeMillis()
             RangeMode.CUSTOM -> {
@@ -158,7 +158,7 @@ fun RecordListScreen(
                     maxText = maxText,
                     onMaxChange = { maxText = it.filterAmount() },
                     onReset = {
-                        rangeMode = RangeMode.MONTH
+                        rangeMode = RangeMode.ALL
                         customStartMillis = null
                         customEndMillis = null
                         selectedTagId = null
@@ -530,6 +530,8 @@ private fun formatDateTime(epochMillis: Long): String {
     val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.getDefault())
     return dt.format(fmt)
 }
+
+private fun allRangeMillis(): Pair<Long, Long> = 0L to Long.MAX_VALUE
 
 private fun currentMonthRangeMillis(): Pair<Long, Long> {
     val zone = ZoneId.systemDefault()

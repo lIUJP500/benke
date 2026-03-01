@@ -268,7 +268,65 @@ fun AddRecordScreen(
     }
 
     /* ---------------- UI ---------------- */
+    fun startSmartParse() {
+        parseState = ParseState.Parsing
+        scope.launch {
+            try {
+                // 1) OCR / 语音 / 文本 -> 统一得到 parseText
+                val parseText = buildParseText()
+                if (parseText.isBlank()) {
+                    parseState = ParseState.Error("没有识别到可解析的文本（图片可能太糊/无文字）")
+                    return@launch
+                }
 
+                // 2) 如果是图像，把 OCR 文本写入 rawTextToSave（保证“原始输入文本化”可追溯）
+                if (rawType == "photo" || rawType == "camera") {
+                    rawTextToSave = parseText
+                    rawText = parseText
+                    rawPreview = parseText.take(120)
+                }
+
+                // 3) 调大模型
+                val ai = AiParserRepository.parseExpense(
+                    text = parseText,
+                    inputType = rawType,
+                    rawUri = rawUri
+                )
+
+                // 4) fallback：模型缺字段，用本地规则补
+                val now = LocalDateTime.now()
+                val amount = ai.amount ?: extractFirstNumber(parseText)
+                val title = ai.title?.takeIf { it.isNotBlank() }
+                    ?: extractTitle(parseText).ifBlank { "消费" }
+
+                val occurredAtText = ai.occurredAt
+                    ?: now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+
+                val parsed = ParsedRecordUi(
+                    dateText = occurredAtText,
+                    title = title,
+                    amountText = amount?.toString() ?: "",
+                    tags = ai.tags,
+                    rawPreview = rawPreview.ifBlank { parseText.take(120) }
+                )
+
+                parseState = ParseState.Parsed(parsed)
+                parsedAiMeta = ParsedAiMeta(
+                    occurredAtMillis = ai.occurredAtMillis,
+                    inputType = ai.inputType,
+                    rawText = ai.rawText,
+                    rawUri = ai.rawUri
+                )
+                editDate = parsed.dateText
+                editTitle = parsed.title
+                editAmount = parsed.amountText
+                editTags = parsed.tags
+
+            } catch (e: Exception) {
+                parseState = ParseState.Error("解析失败：${e.message ?: "未知错误"}")
+            }
+        }
+    }
     Scaffold(
         topBar = { TopAppBar(title = { Text("记一笔") }) }
     ) { innerPadding ->
@@ -326,63 +384,7 @@ fun AddRecordScreen(
                 rawText = rawText,
                 onRawTextChange = { rawText = it },
                 onSmartParse = {
-                    parseState = ParseState.Parsing
-                    scope.launch {
-                        try {
-                            // 1) OCR / 语音 / 文本 -> 统一得到 parseText
-                            val parseText = buildParseText()
-                            if (parseText.isBlank()) {
-                                parseState = ParseState.Error("没有识别到可解析的文本（图片可能太糊/无文字）")
-                                return@launch
-                            }
-
-                            // 2) 如果是图像，把 OCR 文本写入 rawTextToSave（保证“原始输入文本化”可追溯）
-                            if (rawType == "photo" || rawType == "camera") {
-                                rawTextToSave = parseText
-                                rawText = parseText
-                                rawPreview = parseText.take(120)
-                            }
-
-                            // 3) 调大模型（当前仓库里是可运行 stub，后面替换为真实 API）
-                            val ai = AiParserRepository.parseExpense(
-                                text = parseText,
-                                inputType = rawType,
-                                rawUri = rawUri
-                            )
-
-                            // 4) fallback：模型缺字段，用本地规则补
-                            val now = LocalDateTime.now()
-                            val amount = ai.amount ?: extractFirstNumber(parseText)
-                            val title = ai.title?.takeIf { it.isNotBlank() }
-                                ?: extractTitle(parseText).ifBlank { "消费" }
-
-                            val occurredAtText = ai.occurredAt
-                                ?: now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-
-                            val parsed = ParsedRecordUi(
-                                dateText = occurredAtText,
-                                title = title,
-                                amountText = amount?.toString() ?: "",
-                                tags = ai.tags,
-                                rawPreview = rawPreview.ifBlank { parseText.take(120) }
-                            )
-
-                            parseState = ParseState.Parsed(parsed)
-                            parsedAiMeta = ParsedAiMeta(
-                                occurredAtMillis = ai.occurredAtMillis,
-                                inputType = ai.inputType,
-                                rawText = ai.rawText,
-                                rawUri = ai.rawUri
-                            )
-                            editDate = parsed.dateText
-                            editTitle = parsed.title
-                            editAmount = parsed.amountText
-                            editTags = parsed.tags
-
-                        } catch (e: Exception) {
-                            parseState = ParseState.Error("解析失败：${e.message ?: "未知错误"}")
-                        }
-                    }
+                    startSmartParse()
                 },
                 onVoiceClick = {
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -439,7 +441,7 @@ fun AddRecordScreen(
                                 OutlinedButton(onClick = { parseState = ParseState.Idle }) {
                                     Text("取消")
                                 }
-                                Button(onClick = { parseState = ParseState.Parsing }) {
+                                Button(onClick = { startSmartParse() }) {
                                     Text("重试")
                                 }
                             }
@@ -482,7 +484,7 @@ fun AddRecordScreen(
                         tags = editTags,
                         onTagsChange = { editTags = it },
                         rawPreview = rawPreview.ifBlank { rawText },
-                        onReparse = { parseState = ParseState.Parsing },
+                        onReparse = { startSmartParse() },
                         onSave = {
                             val titleToSave = editTitle.trim()
                             val amountToSave = editAmount.trim().toDoubleOrNull()

@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -60,12 +61,14 @@ object GlmOcrRepository {
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
                 val detail = raw.take(240).ifBlank { "无响应体" }
+                val detail = extractErrorMessage(raw).ifBlank { raw.take(240).ifBlank { "无响应体" } }
                 error("GLM-OCR 请求失败(${resp.code})：$detail")
             }
             if (raw.isBlank()) return@use ""
 
             val root = json.parseToJsonElement(raw).jsonObject
             val content = root["choices"]
+            val contentNode = root["choices"]
                 ?.jsonArray
                 ?.firstOrNull()
                 ?.jsonObject
@@ -76,8 +79,44 @@ object GlmOcrRepository {
                 ?.content
                 ?.trim()
                 .orEmpty()
+            val content = extractContentText(contentNode)
 
             content
+        }
+    }
+
+    private fun extractContentText(node: kotlinx.serialization.json.JsonElement?): String {
+        if (node == null) return ""
+
+        return when (node) {
+            is JsonPrimitive -> node.contentOrNull.orEmpty().trim()
+            is JsonArray -> node.joinToString("\n") { item ->
+                val obj = item as? JsonObject
+                when {
+                    obj == null -> (item as? JsonPrimitive)?.contentOrNull.orEmpty()
+                    obj["type"]?.jsonPrimitive?.contentOrNull == "text" ->
+                        obj["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    obj["text"] != null ->
+                        obj["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    else -> ""
+                }
+            }.trim()
+            else -> node.toString().trim()
+        }
+    }
+
+    private fun extractErrorMessage(raw: String): String {
+        if (raw.isBlank()) return ""
+        return try {
+            val root = json.parseToJsonElement(raw).jsonObject
+            root["error"]
+                ?.jsonObject
+                ?.get("message")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                .orEmpty()
+        } catch (_: Exception) {
+            ""
         }
     }
 

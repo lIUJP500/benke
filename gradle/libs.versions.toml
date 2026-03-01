@@ -25,6 +25,6 @@ room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 [plugins]
 android-application = { id = "com.android.application", version = "8.4.0" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "1.9.22" }
-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version = "1.9.22" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version = "1.9.23" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version = "1.9.23" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

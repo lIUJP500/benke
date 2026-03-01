@@ -61,8 +61,8 @@ object GlmOcrRepository {
             val raw = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
                 val detail = raw.take(240).ifBlank { "无响应体" }
-                val detail = extractErrorMessage(raw).ifBlank { raw.take(240).ifBlank { "无响应体" } }
-                error("GLM-OCR 请求失败(${resp.code})：$detail")
+                val failureMessage = buildFailureMessage(raw)
+                error("GLM-OCR 请求失败(${resp.code})：$failureMessage")
             }
             if (raw.isBlank()) return@use ""
 
@@ -75,16 +75,24 @@ object GlmOcrRepository {
                 ?.get("message")
                 ?.jsonObject
                 ?.get("content")
-                ?.jsonPrimitive
-                ?.content
-                ?.trim()
-                .orEmpty()
             val content = extractContentText(contentNode)
-
             content
         }
     }
-
+    private fun extractErrorMessage(raw: String): String {
+        if (raw.isBlank()) return ""
+        return try {
+            val root = json.parseToJsonElement(raw).jsonObject
+            root["error"]
+                ?.jsonObject
+                ?.get("message")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                .orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
+    }
     private fun extractContentText(node: kotlinx.serialization.json.JsonElement?): String {
         if (node == null) return ""
 
@@ -105,9 +113,10 @@ object GlmOcrRepository {
         }
     }
 
-    private fun extractErrorMessage(raw: String): String {
-        if (raw.isBlank()) return ""
-        return try {
+    private fun buildFailureMessage(raw: String): String {
+        if (raw.isBlank()) return "无响应体"
+
+        val parsedMessage = try {
             val root = json.parseToJsonElement(raw).jsonObject
             root["error"]
                 ?.jsonObject
@@ -118,8 +127,9 @@ object GlmOcrRepository {
         } catch (_: Exception) {
             ""
         }
-    }
 
+        return parsedMessage.ifBlank { raw.take(240).ifBlank { "无响应体" } }
+    }
     private fun buildRequestBody(dataUrl: String): String {
         val payload = buildJsonObject {
             put("model", JsonPrimitive(MODEL))

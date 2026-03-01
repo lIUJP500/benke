@@ -11,7 +11,7 @@ import com.bitcat.accountbook.data.entity.TagEntity
 import com.bitcat.accountbook.data.entity.RecordTagCrossRef
 
 @Database(entities = [RecordEntity::class, RawInputEntity::class,TagEntity::class,
-    RecordTagCrossRef::class], version = 3)
+    RecordTagCrossRef::class], version = 3, exportSchema = true)
 
 abstract class AppDatabase : RoomDatabase() {
     abstract fun recordDao(): RecordDao

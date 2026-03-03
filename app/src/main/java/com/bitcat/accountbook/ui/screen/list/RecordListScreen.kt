@@ -218,7 +218,7 @@ fun RecordListScreen(
                             onOpenDetail = { id -> navController.navigate("detail/$id") },
                             onDelete = { pendingDelete = item.record },
                             onEdit = {
-                                // TODO: 你做 edit 页后改成 navController.navigate("edit/${item.record.id}")
+                                navController.navigate("edit/${item.record.id}")
                             }
                         )
                     }

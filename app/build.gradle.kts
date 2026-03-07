@@ -5,7 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
 
 }
-val zhipuKey: String = project.findProperty("ZHIPU_API_KEY") as? String ?: ""
+val zhipuKey: String = (
+    project.findProperty("ZHIPU_API_KEY") as? String
+        ?: System.getenv("ZHIPU_API_KEY")
+        ?: ""
+).trim()
 
 android {
     namespace = "com.bitcat.accountbook"

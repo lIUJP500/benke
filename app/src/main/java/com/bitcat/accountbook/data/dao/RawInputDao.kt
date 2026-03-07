@@ -28,6 +28,22 @@ interface RawInputDao {
     @Query("SELECT * FROM raw_inputs WHERE record_id = :recordId ORDER BY created_at DESC LIMIT 1")
     suspend fun getLatestByRecordId(recordId: Long): RawInputEntity?
 
+    @Query(
+        """
+        SELECT ri.*
+        FROM raw_inputs ri
+        INNER JOIN (
+            SELECT record_id, MAX(created_at) AS max_created_at
+            FROM raw_inputs
+            WHERE record_id IN (:recordIds)
+            GROUP BY record_id
+        ) latest
+        ON ri.record_id = latest.record_id
+        AND ri.created_at = latest.max_created_at
+        """
+    )
+    suspend fun getLatestByRecordIds(recordIds: List<Long>): List<RawInputEntity>
+
     @Query("DELETE FROM raw_inputs WHERE record_id = :recordId")
     suspend fun deleteByRecordId(recordId: Long)
 

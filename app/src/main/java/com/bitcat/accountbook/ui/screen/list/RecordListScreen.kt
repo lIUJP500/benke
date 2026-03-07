@@ -83,8 +83,14 @@ fun RecordListScreen(
         key1 = recordsWithTags
     ) {
         value = withContext(Dispatchers.IO) {
+            val recordIds = recordsWithTags.map { it.record.id }
+            val latestRawByRecordId = if (recordIds.isEmpty()) {
+                emptyMap()
+            } else {
+                rawDao.getLatestByRecordIds(recordIds).associateBy { it.recordId }
+            }
             recordsWithTags.map { item ->
-                val raw = rawDao.getLatestByRecordId(item.record.id)
+                val raw = latestRawByRecordId[item.record.id]
                 RecordWithTagsAndRaw(
                     record = item.record,
                     tags = item.tags,

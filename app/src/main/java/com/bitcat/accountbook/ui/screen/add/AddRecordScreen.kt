@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.speech.RecognizerIntent
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -62,6 +63,7 @@ import com.bitcat.accountbook.ui.component.RawInputCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -177,8 +179,13 @@ fun AddRecordScreen(
         rawPreview = preview
 
         // 统一“解析入口”：让解析都从 rawText 开始（语音直接塞 text；图像走 OCR 后也会塞）
-        rawText = text ?: ""
-        selectedMethod = InputMethod.TEXT
+        if (text != null) rawText = text
+        selectedMethod = when (type) {
+            "voice" -> InputMethod.VOICE
+            "photo" -> InputMethod.PHOTO
+            "camera" -> InputMethod.CAMERA
+            else -> InputMethod.TEXT
+        }
     }
 
     /* ---------------- 相机：FileProvider uri + 权限 ---------------- */
@@ -319,6 +326,8 @@ fun AddRecordScreen(
             RawInputCard(
                 method = selectedMethod,
                 rawText = rawText,
+                rawUri = rawUri,
+                rawPreview = rawPreview,
                 onRawTextChange = { rawText = it },
                 onSmartParse = {
                     parseState = ParseState.Parsing
@@ -490,49 +499,52 @@ fun AddRecordScreen(
                                 ?: parseDateTimeToMillis(editDate)
                                 ?: System.currentTimeMillis()
 
-                            scope.launch(Dispatchers.IO) {
+                            scope.launch {
                                 try {
-                                    val nowMillis = System.currentTimeMillis()
+                                    withContext(Dispatchers.IO) {
+                                        val nowMillis = System.currentTimeMillis()
 
-                                    val id = recordDao.insertRecordWithTags(
-                                        record = RecordEntity(
-                                            occurredAt = occurredAtMillis,
-                                            title = titleToSave,
-                                            amount = amountToSave,
-                                            createdAt = nowMillis,
-                                            updatedAt = nowMillis
-                                        ),
-                                        tagIds = selectedTagIds.toList()
-                                    )
-
-                                    db.rawInputDao().insert(
-                                        RawInputEntity(
-                                            recordId = id,
-                                            inputType = parsedAiMeta.inputType ?: rawType,
-                                            rawText = parsedAiMeta.rawText
-                                                ?: rawTextToSave
-                                                ?: rawText.takeIf { it.isNotBlank() },
-                                            rawUri = parsedAiMeta.rawUri ?: rawUri,
-                                            createdAt = nowMillis
+                                        val id = recordDao.insertRecordWithTags(
+                                            record = RecordEntity(
+                                                occurredAt = occurredAtMillis,
+                                                title = titleToSave,
+                                                amount = amountToSave,
+                                                createdAt = nowMillis,
+                                                updatedAt = nowMillis
+                                            ),
+                                            tagIds = selectedTagIds.toList()
                                         )
-                                    )
 
-                                    Log.d("DB", "Inserted record id=$id, raw type=$rawType")
+                                        db.rawInputDao().insert(
+                                            RawInputEntity(
+                                                recordId = id,
+                                                inputType = parsedAiMeta.inputType ?: rawType,
+                                                rawText = parsedAiMeta.rawText
+                                                    ?: rawTextToSave
+                                                    ?: rawText.takeIf { it.isNotBlank() },
+                                                rawUri = parsedAiMeta.rawUri ?: rawUri,
+                                                createdAt = nowMillis
+                                            )
+                                        )
 
+                                        Log.d("DB", "Inserted record id=$id, raw type=$rawType")
+                                    }
+                                    Toast.makeText(context, "添加成功", Toast.LENGTH_SHORT).show()
+
+                                    // UI reset only after persistence success
+                                    rawType = "text"
+                                    rawUri = null
+                                    rawTextToSave = null
+                                    rawPreview = ""
+                                    rawText = ""
+                                    parsedAiMeta = ParsedAiMeta()
+                                    parseState = ParseState.Idle
+                                    selectedTagIds = emptySet()
                                 } catch (e: Exception) {
                                     Log.e("DB", "Insert failed", e)
+                                    parseState = ParseState.Error("保存失败：${e.message ?: "未知错误"}")
                                 }
                             }
-
-                            // UI 重置
-                            rawType = "text"
-                            rawUri = null
-                            rawTextToSave = null
-                            rawPreview = ""
-                            rawText = ""
-                            parsedAiMeta = ParsedAiMeta()
-                            parseState = ParseState.Idle
-                            selectedTagIds = emptySet()
                         }
                     )
                 }

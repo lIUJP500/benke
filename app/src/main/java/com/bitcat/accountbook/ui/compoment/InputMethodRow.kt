@@ -6,8 +6,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
-//  输入方法选择
-enum class InputMethod { TEXT, VOICE, PHOTO, CAMERA  }
+
+// 输入方法选择
+enum class InputMethod { TEXT, VOICE, PHOTO, CAMERA }
 
 @Composable
 fun InputMethodRow(
@@ -26,7 +27,7 @@ fun InputMethodRow(
             label = { Text("语音") }
         )
         FilterChip(
-            selected = selected == InputMethod.PHOTO,
+            selected = selected == InputMethod.CAMERA,
             onClick = { onSelect(InputMethod.CAMERA) },
             label = { Text("拍照") }
         )

@@ -60,6 +60,11 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
+    val sherpaAar = file("libs/sherpa-onnx.aar")
+    if (sherpaAar.exists()) {
+        implementation(files(sherpaAar))
+    }
 
 
     implementation("androidx.core:core-ktx:1.13.1")
@@ -108,4 +113,5 @@ dependencies {
     // HTTP
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
 }

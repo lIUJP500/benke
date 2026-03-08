@@ -1,18 +1,46 @@
-package com.bitcat.accountbook.ui.screen.list
+﻿package com.bitcat.accountbook.ui.screen.list
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDateRangePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -21,17 +49,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.bitcat.accountbook.data.database.DatabaseProvider
-import com.bitcat.accountbook.data.entity.RecordEntity
 import com.bitcat.accountbook.data.entity.TagEntity
 import com.bitcat.accountbook.data.model.RecordWithTagsAndRaw
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.*
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class RangeMode(val label: String) { WEEK("本周"), MONTH("本月"), CUSTOM("自定义") }
+private enum class RangeMode(val label: String) {
+    WEEK("本周"),
+    MONTH("本月"),
+    CUSTOM("自定义")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,9 +82,8 @@ fun RecordListScreen(
     val scope = rememberCoroutineScope()
 
     val allTags by tagDao.observeAllTags().collectAsStateWithLifecycle(initialValue = emptyList())
-    var selectedTagId by rememberSaveable { mutableStateOf<Long?>(null) } // null=全部
+    var selectedTagId by rememberSaveable { mutableStateOf<Long?>(null) }
 
-    // ====== 筛选条件 ======
     var rangeMode by rememberSaveable { mutableStateOf(RangeMode.MONTH) }
     var customStartMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var customEndMillis by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -77,7 +110,6 @@ fun RecordListScreen(
         startMillis, endMillis, minAmount, maxAmount, selectedTagId
     ).collectAsStateWithLifecycle(initialValue = emptyList())
 
-    // ✅ 你现在已经写了 “带 raw 的列表”，这里保留
     val recordsFull by produceState(
         initialValue = emptyList<RecordWithTagsAndRaw>(),
         key1 = recordsWithTags
@@ -90,11 +122,10 @@ fun RecordListScreen(
                 rawDao.getLatestByRecordIds(recordIds).associateBy { it.recordId }
             }
             recordsWithTags.map { item ->
-                val raw = latestRawByRecordId[item.record.id]
                 RecordWithTagsAndRaw(
                     record = item.record,
                     tags = item.tags,
-                    raw = raw
+                    raw = latestRawByRecordId[item.record.id]
                 )
             }
         }
@@ -104,12 +135,8 @@ fun RecordListScreen(
         startMillis, endMillis, minAmount, maxAmount, selectedTagId
     ).collectAsStateWithLifecycle(initialValue = 0.0)
 
-    // ====== Sheet/Dialog 控制 ======
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showDateSheet by rememberSaveable { mutableStateOf(false) }
-
-    // ====== 删除确认 ======
-    var pendingDelete by remember { mutableStateOf<RecordEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -131,7 +158,6 @@ fun RecordListScreen(
         }
     ) { innerPadding ->
 
-        // ✅ 日期 BottomSheet
         if (showDateSheet) {
             DateRangePickerSheet(
                 onDismiss = { showDateSheet = false },
@@ -143,11 +169,8 @@ fun RecordListScreen(
             )
         }
 
-        // ✅ 筛选 BottomSheet
         if (showFilterSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showFilterSheet = false },
-            ) {
+            ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
                 FilterSheetContent(
                     rangeMode = rangeMode,
                     allTags = allTags,
@@ -177,30 +200,6 @@ fun RecordListScreen(
             }
         }
 
-        // ✅ 删除确认
-        if (pendingDelete != null) {
-            AlertDialog(
-                onDismissRequest = { pendingDelete = null },
-                title = { Text("删除这条记录？") },
-                text = { Text("删除后无法恢复（原始输入也会一并清理）。") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val target = pendingDelete!!
-                            pendingDelete = null
-                            scope.launch(Dispatchers.IO) {
-                                dao.deleteById(target.id)
-                            }
-                        }
-                    ) { Text("删除") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingDelete = null }) { Text("取消") }
-                }
-            )
-        }
-
-        // ✅ 列表
         Box(
             modifier = modifier
                 .padding(innerPadding)
@@ -219,13 +218,9 @@ fun RecordListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(recordsFull, key = { it.record.id }) { item ->
-                        SwipeRecordItem(
+                        RecordItem(
                             item = item,
-                            onOpenDetail = { id -> navController.navigate("detail/$id") },
-                            onDelete = { pendingDelete = item.record },
-                            onEdit = {
-                                // TODO: 你做 edit 页后改成 navController.navigate("edit/${item.record.id}")
-                            }
+                            onOpenDetail = { id -> navController.navigate("detail/$id") }
                         )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
@@ -234,8 +229,6 @@ fun RecordListScreen(
         }
     }
 }
-
-/* ======================== BottomSheet 内容 ======================== */
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -279,7 +272,11 @@ private fun FilterSheetContent(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(customLabel, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text(
+                            customLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
                         OutlinedButton(onClick = onPickCustomRange) { Text("选日期") }
                     }
                 }
@@ -289,7 +286,6 @@ private fun FilterSheetContent(
         Card {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("标签", style = MaterialTheme.typography.titleMedium)
-
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = (selectedTagId == null),
@@ -326,7 +322,7 @@ private fun FilterSheetContent(
                         singleLine = true
                     )
                 }
-                Text("留空表示不限制。", style = MaterialTheme.typography.bodySmall)
+                Text("留空表示不限制", style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -340,110 +336,56 @@ private fun FilterSheetContent(
     }
 }
 
-/* ======================== Swipe Item（编辑 / 删除 + 点击进详情） ======================== */
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun SwipeRecordItem(
+private fun RecordItem(
     item: RecordWithTagsAndRaw,
-    onOpenDetail: (Long) -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onOpenDetail: (Long) -> Unit
 ) {
     val record = item.record
     val tags = item.tags
     val rawPreview = item.raw?.rawText?.trim().orEmpty()
     val dt = remember(record.occurredAt) { formatDateTime(record.occurredAt) }
 
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> { onEdit(); false }
-                SwipeToDismissBoxValue.EndToStart -> { onDelete(); false }
-                else -> false
-            }
-        }
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            val target = dismissState.targetValue
-            val isDelete = target == SwipeToDismissBoxValue.EndToStart
-            val isEdit = target == SwipeToDismissBoxValue.StartToEnd
-
-            val bgColor = when {
-                isDelete -> MaterialTheme.colorScheme.errorContainer
-                isEdit -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(bgColor)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = if (isDelete) Arrangement.End else Arrangement.Start
-            ) {
-                when {
-                    isDelete -> {
-                        Icon(Icons.Filled.Delete, contentDescription = "删除")
-                        Spacer(Modifier.width(8.dp))
-                        Text("删除")
-                    }
-                    isEdit -> {
-                        Icon(Icons.Filled.Edit, contentDescription = "编辑")
-                        Spacer(Modifier.width(8.dp))
-                        Text("编辑")
-                    }
-                }
-            }
-        }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenDetail(record.id) }
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onOpenDetail(record.id) }
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = record.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(dt, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Text("¥${record.amount.format2()}", style = MaterialTheme.typography.titleMedium)
-                }
-
-                if (tags.isNotEmpty()) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        tags.forEach { t -> AssistChip(onClick = {}, label = { Text(t.name) }) }
-                    }
-                }
-
-                // 你说不做“带 raw 的列表页”，可以直接把这段删掉
-                if (rawPreview.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "原始：${rawPreview.take(60)}",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = record.title,
+                        style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Text(dt, style = MaterialTheme.typography.bodySmall)
                 }
+                Text("¥${record.amount.format2()}", style = MaterialTheme.typography.titleMedium)
+            }
+
+            if (tags.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tags.forEach { t -> AssistChip(onClick = {}, label = { Text(t.name) }) }
+                }
+            }
+
+            if (rawPreview.isNotBlank()) {
+                Text(
+                    text = "原始：${rawPreview.take(60)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
 }
-
-/* ======================== 其余小组件 / 日期Sheet / 工具函数 ======================== */
 
 @Composable
 private fun TotalBar(count: Int, total: Double, modifier: Modifier = Modifier) {
@@ -563,5 +505,5 @@ private fun buildCustomRangeLabel(startMillis: Long?, endMillis: Long?): String 
     val startDate = Instant.ofEpochMilli(startMillis).atZone(zone).toLocalDate()
     val endDate = Instant.ofEpochMilli(endMillis).atZone(zone).toLocalDate()
     val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.getDefault())
-    return "已选：${startDate.format(fmt)} ～ ${endDate.format(fmt)}"
+    return "已选：${startDate.format(fmt)} ~ ${endDate.format(fmt)}"
 }

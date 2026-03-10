@@ -6,7 +6,7 @@ import android.util.Base64
 import com.bitcat.accountbook.BuildConfig
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -34,7 +34,7 @@ object OcrHelper {
     private const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
     private val recognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
     }
 
     private val http = OkHttpClient.Builder()
@@ -62,6 +62,36 @@ object OcrHelper {
         }
 
         return recognizeWithMlKit(context, uri)
+    }
+
+    suspend fun recognizeTextSmart(context: Context, uri: Uri): String {
+        val localText = runCatching { recognizeWithMlKit(context, uri) }.getOrDefault("").trim()
+        if (isHighQualityReceiptText(localText) && hasReliableAmountSignal(localText)) {
+            return localText
+        }
+
+        val key = BuildConfig.ZHIPU_API_KEY.trim()
+        if (key.isNotBlank()) {
+            val cloudText = runCatching {
+                recognizeWithZhipuOcr(context, uri, key)
+            }.getOrNull()?.trim().orEmpty()
+            if (cloudText.isNotBlank()) {
+                return cloudText
+            }
+        }
+
+        return localText
+    }
+
+    suspend fun recognizeTextLocal(context: Context, uri: Uri): String {
+        return recognizeWithMlKit(context, uri)
+    }
+
+    suspend fun recognizeTextByZhipu(context: Context, uri: Uri): String {
+        val key = BuildConfig.ZHIPU_API_KEY.trim()
+        require(key.isNotBlank()) { "未配置智谱 OCR API Key" }
+        return recognizeWithZhipuOcr(context, uri, key)?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("智谱 OCR 识别失败")
     }
 
     private suspend fun recognizeWithMlKit(context: Context, uri: Uri): String {
@@ -170,4 +200,27 @@ object OcrHelper {
     }
 
     private val TEXT_KEYS = setOf("text", "content", "markdown", "md")
+
+    private fun isHighQualityReceiptText(text: String): Boolean {
+        if (text.length < 20) return false
+
+        val keywords = listOf("商品", "支付", "交易", "商户", "状态", "金额", "美团", "收单", "实付")
+        val hitCount = keywords.count { text.contains(it) }
+        val hasAmount = Regex("""[-+]?\d+\.\d{1,2}""").containsMatchIn(text)
+
+        return hitCount >= 2 && hasAmount
+    }
+
+    private fun hasReliableAmountSignal(text: String): Boolean {
+        val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val hasKeywordAmount = Regex(
+            """(?:实付|实付款|支付金额|实收|合计|应付|应支付|已支付)\D{0,8}[-+]?\d+(?:\.\d+)?"""
+        ).containsMatchIn(text)
+        if (hasKeywordAmount) return true
+
+        val topAmountLine = lines.take(8).any { line ->
+            Regex("""^[-+]?\d+(?:\.\d{1,2})?$""").matches(line)
+        }
+        return topAmountLine
+    }
 }

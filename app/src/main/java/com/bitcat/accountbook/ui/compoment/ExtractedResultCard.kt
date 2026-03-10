@@ -5,20 +5,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -31,11 +34,10 @@ fun ExtractedResultCard(
     onAmountTextChange: (String) -> Unit,
     tags: List<String>,
     onTagsChange: (List<String>) -> Unit,
-    rawPreview: String,
     onReparse: () -> Unit,
+    onCancel: () -> Unit,
     onSave: () -> Unit
 ) {
-    var showRaw by remember { mutableStateOf(false) }
     var showTagSheet by remember { mutableStateOf(false) }
 
     if (showTagSheet) {
@@ -49,67 +51,82 @@ fun ExtractedResultCard(
         )
     }
 
-    Card {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("解析结果（可核对修改）", style = MaterialTheme.typography.titleMedium)
+            Text("解析结果", style = MaterialTheme.typography.titleMedium)
 
             OutlinedTextField(
                 value = dateText,
                 onValueChange = onDateTextChange,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
                 label = { Text("消费时间") },
-                supportingText = { Text("后续可替换为日期/时间选择器") }
+                placeholder = { Text("例如 2026-03-08 12:30") },
+                supportingText = { Text("格式：yyyy-MM-dd HH:mm") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
 
             OutlinedTextField(
                 value = title,
                 onValueChange = onTitleChange,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
                 label = { Text("消费事项") },
-                singleLine = true
+                placeholder = { Text("例如 午餐、外卖、打车") },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
 
             OutlinedTextField(
                 value = amountText,
                 onValueChange = onAmountTextChange,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
                 label = { Text("消费金额") },
-                prefix = { Text("¥") }
+                placeholder = { Text("0.00") },
+                prefix = { Text("¥") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
                     onClick = { showTagSheet = true },
-                    label = { Text("选择/新增标签") }
+                    label = { Text("选择标签") }
                 )
                 if (tags.isNotEmpty()) {
                     Text("已选：${tags.joinToString("、")}", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
-            TextButton(onClick = { showRaw = !showRaw }) {
-                Text(if (showRaw) "收起原始输入" else "查看原始输入")
-            }
-            if (showRaw) {
-                Text(rawPreview, style = MaterialTheme.typography.bodySmall)
-            }
+            OutlinedButton(
+                onClick = onReparse,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) { Text("重新解析") }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onReparse,
-                    modifier = Modifier.weight(1f)
-                ) { Text("重新解析") }
-
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier.weight(1f)
-                ) { Text("保存") }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("取消") }
+                Button(onClick = onSave, modifier = Modifier.weight(1f)) { Text("保存") }
             }
         }
     }

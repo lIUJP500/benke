@@ -10,6 +10,11 @@ val zhipuKey: String = (
         ?: System.getenv("ZHIPU_API_KEY")
         ?: ""
 ).trim()
+val zhipuModel: String = (
+    project.findProperty("ZHIPU_MODEL") as? String
+        ?: System.getenv("ZHIPU_MODEL")
+        ?: "glm-4.6v"
+).trim()
 
 android {
     namespace = "com.bitcat.accountbook"
@@ -24,6 +29,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ZHIPU_API_KEY", "\"${zhipuKey}\"")
+        buildConfigField("String", "ZHIPU_MODEL", "\"${zhipuModel}\"")
     }
 
     buildTypes {
